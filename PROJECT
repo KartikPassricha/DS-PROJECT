@@ -1,0 +1,435 @@
+#include <iostream>
+#include <string>
+#include <queue>
+#include <stack>
+#include <map>
+#include <vector>
+
+using namespace std;
+
+// Function to print a decorative line
+void printLine(char ch, int length) {
+    for (int i = 0; i < length; i++) {
+        cout << ch;
+    }
+    cout << endl;
+}
+
+// Book class
+class Book {
+public:
+    int ISBN;
+    string title;
+    string author;
+    int year;
+    string category;
+    int totalCopies;
+    int availableCopies;
+
+    Book(int isbn, string t, string a, int y, string c, int copies)
+        : ISBN(isbn), title(t), author(a), year(y), category(c), totalCopies(copies), availableCopies(copies) {}
+
+    // Display book details with decoration
+    void display() {
+        printLine('-', 70);
+        cout << "| ISBN: " << ISBN << "\t| Title: " << title 
+             << "\t| Author: " << author 
+             << "\t| Year: " << year 
+             << "\t| Category: " << category 
+             << "\t| Available Copies: " << availableCopies 
+             << "/" << totalCopies << "\t|";
+        printLine('-', 70);
+    }
+
+    // Check if book is available
+    bool isAvailable() const {
+        return availableCopies > 0;
+    }
+
+    // Borrow a copy of the book
+    bool borrow() {
+        if (availableCopies > 0) {
+            availableCopies--;
+            return true;
+        }
+        return false;
+    }
+
+    // Return a copy of the book
+    void returnBook() {
+        availableCopies++;
+    }
+};
+
+// User class
+class User {
+public:
+    int userID;
+    string name;
+    stack<Book*> borrowHistory;
+
+    User(int id, string n) : userID(id), name(n) {}
+
+    // Display user's borrowing history with decoration
+    void displayBorrowHistory() {
+        printLine('=', 70);
+        cout << "Borrowing History for User: " << name << endl;
+        printLine('=', 70);
+        
+        if (borrowHistory.empty()) {
+            cout << "No borrowing history for user " << name << ".\n";
+            printLine('=', 70);
+            return;
+        }
+        
+        stack<Book*> temp = borrowHistory;
+        while (!temp.empty()) {
+            Book* book = temp.top();
+            book->display();
+            temp.pop();
+        }
+    }
+};
+
+// Borrow request class
+class BorrowRequest {
+public:
+    int userID;
+    int ISBN;
+    string borrowDate;
+    string dueDate;
+
+    BorrowRequest(int uID, int isbn, string bDate, string dDate)
+        : userID(uID), ISBN(isbn), borrowDate(bDate), dueDate(dDate) {}
+};
+
+// Priority Queue comparator for overdue books
+struct CompareDueDate {
+    bool operator()(BorrowRequest* a, BorrowRequest* b) {
+        return a->dueDate > b->dueDate;
+    }
+};
+
+// Library Management System class
+class Library {
+public:
+    map<int, Book*> booksByISBN;              // Store books by ISBN
+    map<string, vector<Book*>> booksByTitle;  // Store books by title
+    map<string, vector<Book*>> booksByAuthor; // Store books by author
+    map<int, vector<Book*>> booksByYear;      // Store books by year
+    map<string, vector<Book*>> booksByCategory; // Store books by category
+    map<int, User*> users;
+    priority_queue<BorrowRequest*, vector<BorrowRequest*>, CompareDueDate> overdueBooks;
+
+    // Add a new book (multiple copies allowed)
+    void addBook() {
+        int isbn, year, copies;
+        string title, author, category;
+
+        cout << "\n=== Add Book ===\n";
+        cout << "Enter ISBN: ";
+        cin >> isbn;
+        cout << "Enter title: ";
+        cin.ignore();
+        getline(cin, title);
+        cout << "Enter author: ";
+        getline(cin, author);
+        cout << "Enter year: ";
+        cin >> year;
+        cout << "Enter category: ";
+        cin.ignore();
+        getline(cin, category);
+        cout << "Enter number of copies: ";
+        cin >> copies;
+
+        Book* book = new Book(isbn, title, author, year, category, copies);
+        booksByISBN[isbn] = book;
+        booksByTitle[title].push_back(book);
+        booksByAuthor[author].push_back(book);
+        booksByYear[year].push_back(book);
+        booksByCategory[category].push_back(book);
+
+        cout << "Book added successfully.\n";
+    }
+
+    // Add a new user
+    void addUser() {
+        int userID;
+        string name;
+
+        cout << "\n=== Add User ===\n";
+        cout << "Enter user ID: ";
+        cin >> userID;
+        cout << "Enter user name: ";
+        cin.ignore();
+        getline(cin, name);
+
+        users[userID] = new User(userID, name);
+        cout << "User added successfully.\n";
+    }
+
+    // Borrow a book by ISBN
+    void borrowBook() {
+        int userID, ISBN;
+        string borrowDate, dueDate;
+
+        cout << "\n=== Borrow Book ===\n";
+        cout << "Enter user ID: ";
+        cin >> userID;
+        if (users.find(userID) == users.end()) {
+            cout << "User not found.\n";
+            return;
+        }
+
+        cout << "Enter ISBN of the book to borrow: ";
+        cin >> ISBN;
+        Book* book = searchByISBN(ISBN);
+        if (!book || !book->isAvailable()) {
+            cout << "Book is not available!\n";
+            return;
+        }
+
+        cout << "Enter borrow date (YYYY-MM-DD): ";
+        cin >> borrowDate;
+        cout << "Enter due date (YYYY-MM-DD): ";
+        cin >> dueDate;
+
+        if (book->borrow()) {
+            BorrowRequest* request = new BorrowRequest(userID, ISBN, borrowDate, dueDate);
+            users[userID]->borrowHistory.push(book);
+            overdueBooks.push(request);
+
+            cout << "Book borrowed successfully.\n";
+        } else {
+            cout << "No available copies to borrow!\n";
+        }
+    }
+
+    // Return a book by ISBN
+    void returnBook() {
+        int userID, ISBN;
+
+        cout << "\n=== Return Book ===\n";
+        cout << "Enter user ID: ";
+        cin >> userID;
+        if (users.find(userID) == users.end()) {
+            cout << "User not found.\n";
+            return;
+        }
+
+        cout << "Enter ISBN of the book to return: ";
+        cin >> ISBN;
+
+        Book* book = searchByISBN(ISBN);
+        if (!book) {
+            cout << "Invalid ISBN!\n";
+            return;
+        }
+
+        book->returnBook();
+        cout << "Book returned successfully.\n";
+    }
+
+    // Display all books in the library
+    void displayAllBooks() {
+        cout << "\n=== All Books in Library ===\n";
+        printLine('=', 70);
+        for (const auto& pair : booksByISBN) {
+            pair.second->display();
+        }
+        printLine('=', 70);
+    }
+
+    // Search for books by title
+    void searchByTitle() {
+        string title;
+        cout << "\n=== Search Books by Title ===\n";
+        cout << "Enter the title of the book: ";
+        cin.ignore();
+        getline(cin, title);
+
+        if (booksByTitle.find(title) == booksByTitle.end()) {
+            cout << "No books found with the title \"" << title << "\".\n";
+            return;
+        }
+
+        cout << "Books found for the title \"" << title << "\":\n";
+        printLine('-', 70);
+        for (Book* book : booksByTitle[title]) {
+            book->display();
+        }
+        printLine('-', 70);
+    }
+
+    // Search for books by author
+    void searchByAuthor() {
+        string author;
+        cout << "\n=== Search Books by Author ===\n";
+        cout << "Enter the author of the book: ";
+        cin.ignore();
+        getline(cin, author);
+
+        if (booksByAuthor.find(author) == booksByAuthor.end()) {
+            cout << "No books found by author \"" << author << "\".\n";
+            return;
+        }
+
+        cout << "Books found by author \"" << author << "\":\n";
+        printLine('-', 70);
+        for (Book* book : booksByAuthor[author]) {
+            book->display();
+        }
+        printLine('-', 70);
+    }
+
+    // Search for books by year of publication
+    void searchByYear() {
+        int year;
+        cout << "\n=== Search Books by Year ===\n";
+        cout << "Enter the year of publication: ";
+        cin >> year;
+
+        if (booksByYear.find(year) == booksByYear.end()) {
+            cout << "No books found published in the year " << year << ".\n";
+            return;
+        }
+
+        cout << "Books published in the year " << year << ":\n";
+        printLine('-', 70);
+        for (Book* book : booksByYear[year]) {
+            book->display();
+        }
+        printLine('-', 70);
+    }
+
+    // Search for books by category
+    void searchByCategory() {
+        string category;
+        cout << "\n=== Search Books by Category ===\n";
+        cout << "Enter the category of the book: ";
+        cin.ignore();
+        getline(cin, category);
+
+        if (booksByCategory.find(category) == booksByCategory.end()) {
+            cout << "No books found in the category \"" << category << "\".\n";
+            return;
+        }
+
+        cout << "Books found in the category \"" << category << "\":\n";
+        printLine('-', 70);
+        for (Book* book : booksByCategory[category]) {
+            book->display();
+        }
+        printLine('-', 70);
+    }
+
+    // Search for available books only
+    void searchByAvailability() {
+        cout << "\n=== Available Books ===\n";
+        printLine('=', 70);
+        bool found = false;
+        for (const auto& pair : booksByISBN) {
+            if (pair.second->isAvailable()) {
+                pair.second->display();
+                found = true;
+            }
+        }
+        if (!found) {
+            cout << "No available books.\n";
+        }
+        printLine('=', 70);
+    }
+
+    // Display user's borrow history
+    void displayUserHistory() {
+        int userID;
+        cout << "\n=== Display User Borrow History ===\n";
+        cout << "Enter user ID: ";
+        cin >> userID;
+
+        if (users.find(userID) == users.end()) {
+            cout << "User not found.\n";
+            return;
+        }
+
+        users[userID]->displayBorrowHistory();
+    }
+
+private:
+    // Search for a book by ISBN
+    Book* searchByISBN(int ISBN) {
+        if (booksByISBN.find(ISBN) == booksByISBN.end()) {
+            return nullptr;
+        }
+        return booksByISBN[ISBN];
+    }
+};
+
+// Main function for user interaction
+int main() {
+    Library library;
+    int choice;
+
+    while (true) {
+        printLine('=', 70);
+        cout << "           Library Management System          \n";
+        printLine('=', 70);
+        cout << "1. Add Book\n";
+        cout << "2. Add User\n";
+        cout << "3. Borrow Book\n";
+        cout << "4. Return Book\n";
+        cout << "5. Display All Books\n";
+        cout << "6. Search Books by Title\n";
+        cout << "7. Search Books by Author\n";
+        cout << "8. Search Books by Year\n";
+        cout << "9. Search Books by Category\n";
+        cout << "10. Search Books by Availability\n";
+        cout << "11. Display User Borrow History\n";
+        cout << "12. Exit\n";
+        cout << "Enter your choice: ";
+        cin >> choice;
+
+        switch (choice) {
+            case 1:
+                library.addBook();
+                break;
+            case 2:
+                library.addUser();
+                break;
+            case 3:
+                library.borrowBook();
+                break;
+            case 4:
+                library.returnBook();
+                break;
+            case 5:
+                library.displayAllBooks();
+                break;
+            case 6:
+                library.searchByTitle();
+                break;
+            case 7:
+                library.searchByAuthor();
+                break;
+            case 8:
+                library.searchByYear();
+                break;
+            case 9:
+                library.searchByCategory();
+                break;
+            case 10:
+                library.searchByAvailability();
+                break;
+            case 11:
+                library.displayUserHistory();
+                break;
+            case 12:
+                cout << "Exiting...\n";
+                return 0;
+            default:
+                cout << "Invalid choice! Please try again.\n";
+        }
+    }
+
+    return 0;
+}
